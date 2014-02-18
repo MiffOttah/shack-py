@@ -1,47 +1,60 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-from spyCommon import getSources
+from datetime import datetime
+from dateutil.parser import parse
 from urllib.request import urlopen
+
 import feedparser_local as feedparser
-import sys
+import html
 import pdb
+import spyCommon
+import sys
+import traceback
 
 def spyUpdate():
-    sources = getSources()
+    sources = spyCommon.getSources()
 
     for source in sources:
         try:
-            sys.stdout.write('<%d> %s' % (source['id'], source['feedUrl']))
+            print('<{0}> {1}'.format(source['id'], source['feedUrl']))
             feedUrl = source['feedUrl']
             with urlopen(feedUrl) as u:
                 data = u.read()
 
             feed = feedparser.parse(data)
 
-            pdb.set_trace()
+            #with open('feed.json', 'w') as dbgjson:
+            #    json.dump(feed['feed'], dbgjson)
+
+            feedLink = None
+            for l in feed['feed']['links']:
+                if l['rel'] == 'alternate':
+                    feedLink = l['href']
+                    break
+
+            source['title'] = source['overrideTitle'] if source['overrideTitle'] else feed['feed']['title']
 
             updateSourceAttributes(
                                    source['id'],
-                                   source['overrideTitle'] if source['overrideTitle'] else feed['title'],
-                                   feed['link'])
-
-            items = feed["items"]
+                                   source['title'],
+                                   feedLink)
+    
+            items = feed["entries"]
             for item in items:
                 updateItem(source, item)
                 break
 
-            sys.stdout.write(' ✓\n')
 
         except Exception as e:
-            print('! Update error: %s' % repr(e))
-            try: e.print_stack()
+            print('! Update error: {0}'.format(repr(e)))
+            try: traceback.print_exc()
             except: print("No stack trace!") 
             break
 
 def updateSourceAttributes(sourceid, newtitle, newlink):
     cursor = spyCommon.getDBcursor()
-    cursor.execute('UPDATE sources SET title = %s, link = %s WHERE id = %s', newtitle, newlink, sourceid)
+    cursor.execute('UPDATE sources SET title = %s, link = %s WHERE id = %s', (newtitle, newlink, sourceid))
 
 def updateItem(source, item):
     sid = source['id']
@@ -51,13 +64,24 @@ def updateItem(source, item):
     try:
         itemtoenter['title'] = item['title']
     except:
-        print(item['feed']['title'])
-        itemtoenter['title'] = item['feed']['title']
+        itemtoenter['title'] = source['title']
 
-    itemtoenter['guid'] = item['url'] if source['ignoreGuid'] else item['guid']
-    # itemtoenter['link'] = item['link']
+    itemtoenter['guid'] = item['link'] if source['ignoreGuid'] else item['guid']
+    itemtoenter['link'] = item['link']
+    itemtoenter['publishedAt'] = parse(item['published'])
+
+    if source['linkOnlyFeed']:
+        itemtoenter['content'] = mkLofContent(itemtoenter['link'])
+    elif len(item['content']) > 0:
+        itemtoenter['content'] = item['content'][0]['value']
+    else:
+        itemtoenter['content'] = item['summary']
 
     print(itemtoenter)
+
+def makeLofContent(url):
+    urlescaped = html.escape(url)
+    return '<p class="shack-be_linkonlyfeed"><a href="{0}">{0}</a></p>'.format(urlescaped)
 
 
 if __name__ == '__main__':
