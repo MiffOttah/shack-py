@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 import pymysql
@@ -7,8 +6,7 @@ import sys
 DB = pymysql.connect('ebreeze', 'shack-be', 'WXpn788TG29PqB9H', 'shack-be')
 
 def getSources():
-    global DB
-    cursor = DB.cursor(pymysql.cursors.DictCursor)
+    cursor = getDBcursor()
 
     sWhat = 'all'
     sN = 1
@@ -35,4 +33,7 @@ def getSources():
 
     return cursor.fetchall()
 
+def getDBcursor():
+    global DB
+    return DB.cursor(pymysql.cursors.DictCursor)
 

@@ -5,29 +5,59 @@ from spyCommon import getSources
 from urllib.request import urlopen
 import feedparser_local as feedparser
 import sys
+import pdb
 
 def spyUpdate():
     sources = getSources()
 
     for source in sources:
         try:
-            sys.stdout.write('<%d> %s [D] ' % (source['id'], source['feedUrl']))
+            sys.stdout.write('<%d> %s' % (source['id'], source['feedUrl']))
             feedUrl = source['feedUrl']
             with urlopen(feedUrl) as u:
                 data = u.read()
 
-            sys.stdout.write('[P] ')
             feed = feedparser.parse(data)
 
-            items = feed["items"]
-            sys.stdout.write('[I%d] ' % len(items))
+            pdb.set_trace()
 
-            sys.stdout.write('\u2713\n')
+            updateSourceAttributes(
+                                   source['id'],
+                                   source['overrideTitle'] if source['overrideTitle'] else feed['title'],
+                                   feed['link'])
+
+            items = feed["items"]
+            for item in items:
+                updateItem(source, item)
+                break
+
+            sys.stdout.write(' ✓\n')
 
         except Exception as e:
-            print('! Update error: %s' % e)
-#            e.print_stack()
+            print('! Update error: %s' % repr(e))
+            try: e.print_stack()
+            except: print("No stack trace!") 
             break
+
+def updateSourceAttributes(sourceid, newtitle, newlink):
+    cursor = spyCommon.getDBcursor()
+    cursor.execute('UPDATE sources SET title = %s, link = %s WHERE id = %s', newtitle, newlink, sourceid)
+
+def updateItem(source, item):
+    sid = source['id']
+
+    itemtoenter = {}
+
+    try:
+        itemtoenter['title'] = item['title']
+    except:
+        print(item['feed']['title'])
+        itemtoenter['title'] = item['feed']['title']
+
+    itemtoenter['guid'] = item['url'] if source['ignoreGuid'] else item['guid']
+    # itemtoenter['link'] = item['link']
+
+    print(itemtoenter)
 
 
 if __name__ == '__main__':
